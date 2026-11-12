@@ -21,6 +21,7 @@ assert.match(auth, /window\.WaywardCloudSaveDrive\.setAccessToken\(accessToken, 
 assert.match(auth, /nativeWebViewTransportRequested &&/);
 assert.match(auth, /accounts\.google\.com\/gsi\/client/);
 assert.match(auth, /https:\/\/www\.googleapis\.com\/auth\/drive\.appdata/);
+assert.ok(auth.includes(".split(/\\s+/)"), 'scope parsing must split on whitespace');
 
 const nativeStart = auth.indexOf("if (nativeWebViewTransportRequested) {", auth.indexOf("function beginConnection"));
 const gisGuard = auth.indexOf("if (!nativeWebViewTransportRequested &&", auth.indexOf("function beginConnection"));

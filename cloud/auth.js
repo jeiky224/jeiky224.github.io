@@ -6,7 +6,10 @@
   const gameOrigin = params.get('origin') || '';
   const nonce = params.get('nonce') || '';
   const loginPolicy = params.get('login') === 'select_account' ? 'select_account' : 'remember';
-  const nativeTransportRequested = params.get('transport') === 'custom-tabs';
+  const transportMode = params.get('transport') || '';
+  const nativeWebViewTransportRequested = transportMode === 'native-webview';
+  const customTabsTransportRequested = transportMode === 'custom-tabs';
+  const nativeTransportRequested = nativeWebViewTransportRequested || customTabsTransportRequested;
   const AUTH_ORIGIN = 'https://jeiky224.github.io';
   const clientId = String(window.WAYWARD_GOOGLE_CLIENT_ID || '').trim();
   const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.appdata';
@@ -39,6 +42,8 @@
   const seenRequestIds = new Set();
   let nativePort = null;
   let nativeTransportClosed = false;
+  let nativeTransportConnected = false;
+  const nativeHost = nativeWebViewTransportRequested ? window.WaywardAuthHost : null;
   const nativeTransfers = new Map();
   const MAX_NATIVE_MESSAGE_BYTES = 12 * 1024 * 1024;
   const NATIVE_CHUNK_CHARS = 24 * 1024;
@@ -82,7 +87,8 @@
   const originValid = originKind !== 'invalid';
 
   function openerAlive() {
-    if (nativeTransportRequested) return !!nativePort && !nativeTransportClosed;
+    if (nativeWebViewTransportRequested) return nativeTransportConnected && !nativeTransportClosed;
+    if (customTabsTransportRequested) return !!nativePort && !nativeTransportClosed;
     try { return !!window.opener && !window.opener.closed; }
     catch (_) { return false; }
   }
@@ -111,13 +117,38 @@
     catch (_) { return null; }
   }
 
+  function sendNativeCommand(command) {
+    if (!nativeWebViewTransportRequested || !nativeHost ||
+        typeof nativeHost.postMessage !== 'function' || nativeTransportClosed) return false;
+    try {
+      nativeHost.postMessage(JSON.stringify(Object.assign({ nonce }, command || {})));
+      return true;
+    } catch (_) { return false; }
+  }
+
   function sendNativePayload(payload) {
-    if (!nativePort || nativeTransportClosed) return false;
+    if (nativeTransportClosed) return false;
     let raw;
     try { raw = JSON.stringify(payload); } catch (_) { return false; }
     let encoded;
     try { encoded = encodeUtf8Base64(raw); } catch (_) { return false; }
     if (encoded.bytes.length > MAX_NATIVE_MESSAGE_BYTES) return false;
+
+    if (nativeWebViewTransportRequested) {
+      if (encoded.bytes.length <= NATIVE_CHUNK_CHARS)
+        return sendNativeCommand({ type: 'to-game', raw });
+      const id = makeNonce();
+      const total = Math.ceil(encoded.encoded.length / NATIVE_CHUNK_CHARS);
+      if (total > MAX_NATIVE_CHUNKS) return false;
+      for (let seq = 0; seq < total; seq++) {
+        const part = JSON.stringify({ __waywardCctChunk: 1, id, seq, total,
+          data: encoded.encoded.slice(seq * NATIVE_CHUNK_CHARS, (seq + 1) * NATIVE_CHUNK_CHARS) });
+        if (!sendNativeCommand({ type: 'to-game', raw: part })) return false;
+      }
+      return true;
+    }
+
+    if (!nativePort) return false;
     try {
       if (encoded.bytes.length <= NATIVE_CHUNK_CHARS) {
         nativePort.postMessage(raw);
@@ -127,10 +158,8 @@
       const total = Math.ceil(encoded.encoded.length / NATIVE_CHUNK_CHARS);
       if (total > MAX_NATIVE_CHUNKS) return false;
       for (let seq = 0; seq < total; seq++) {
-        nativePort.postMessage(JSON.stringify({
-          __waywardCctChunk: 1, id, seq, total,
-          data: encoded.encoded.slice(seq * NATIVE_CHUNK_CHARS, (seq + 1) * NATIVE_CHUNK_CHARS)
-        }));
+        nativePort.postMessage(JSON.stringify({ __waywardCctChunk: 1, id, seq, total,
+          data: encoded.encoded.slice(seq * NATIVE_CHUNK_CHARS, (seq + 1) * NATIVE_CHUNK_CHARS) }));
       }
       return true;
     } catch (_) { return false; }
@@ -252,7 +281,8 @@
 
   function validParentMessage(event, data, fromNative) {
     if (!data || typeof data !== 'object' || data.version !== PROTOCOL_VERSION || data.nonce !== nonce) return false;
-    if (fromNative) return nativeTransportRequested && !!nativePort && !nativeTransportClosed;
+    if (fromNative) return nativeTransportRequested && !nativeTransportClosed &&
+      (nativeWebViewTransportRequested ? nativeTransportConnected : !!nativePort);
     return openerAlive() && event && event.source === window.opener && event.origin === expectedEventOrigin;
   }
 
@@ -417,6 +447,40 @@
     }
   }
 
+  function handleNativeHostMessage(event) {
+    if (!nativeWebViewTransportRequested) return;
+    let data = event && event.data;
+    if (typeof data === 'string') { try { data = JSON.parse(data); } catch (_) { return; } }
+    if (!data || data.nonce !== nonce || nativeTransportClosed) return;
+    if (data.type === 'native-ready') {
+      nativeTransportConnected = true;
+      originTitle.textContent = 'Wayward 런처 내부 보안 연결 확인됨';
+      originDetail.textContent = '앱 내부 메시지 채널과 일회성 게임 세션 nonce를 확인했습니다.';
+      originValue.textContent = '게임 Origin: ' + gameOrigin;
+      if (!sendToGame('wayward-cloudsave-page-ready'))
+        failClosed('Wayward 런처에 인증 페이지 준비 상태를 전달하지 못했습니다.');
+      else setStatus('게임 연결 확인을 기다리고 있습니다.');
+      updateButtons(); return;
+    }
+    if (!nativeTransportConnected) return;
+    if (data.type === 'game-message') {
+      const payload = receiveNativePayload(data.raw);
+      if (payload) handleParentData(payload, null, true);
+    } else if (data.type === 'auth-result') applyNativeAuthResult(data.payload);
+    else if (data.type === 'revoke-result') applyNativeRevokeResult(data.payload);
+    else if (data.type === 'native-closed') {
+      nativeTransportClosed = true; nativeTransportConnected = false; clearPageToken();
+      failClosed('런처 내부 인증창 연결이 종료되었습니다.');
+    }
+  }
+
+  window.__waywardNativeReceiveFromGame = function (raw) {
+    if (!nativeWebViewTransportRequested || !nativeTransportConnected || nativeTransportClosed) return false;
+    const payload = receiveNativePayload(raw);
+    if (!payload) return false;
+    handleParentData(payload, null, true); return true;
+  };
+
   function handleParentData(data, event, fromNative) {
     if (!validParentMessage(event, data, fromNative)) return;
 
@@ -426,6 +490,7 @@
       failClosed('Wayward 게임 세션이 종료되어 인증 연결과 메모리 토큰을 정리했습니다.');
       try { if (nativePort) nativePort.close(); } catch (_) {}
       nativePort = null;
+      nativeTransportConnected = false;
       return;
     }
 
@@ -438,7 +503,9 @@
         ? 'Wayward 런처 보안 메시지 연결 확인됨'
         : 'Wayward 게임 팝업의 핸드셰이크 확인됨';
       originDetail.textContent = nativeTransportRequested
-        ? 'Digital Asset Links로 검증된 Custom Tabs 메시지 채널과 게임 세션 nonce를 확인했습니다.'
+        ? (nativeWebViewTransportRequested
+          ? '런처 내부 인증창과 일회성 게임 세션 nonce를 확인했습니다.'
+          : 'Digital Asset Links로 검증된 Custom Tabs 메시지 채널과 게임 세션 nonce를 확인했습니다.')
         : (fileMode
           ? '게임 Origin은 opaque origin(null)이며, 실제 opener 창과 일회성 nonce가 확인되었습니다.'
           : '실제 opener 창, 지정된 게임 Origin, 일회성 nonce가 확인되었습니다.');
@@ -477,6 +544,7 @@
     const port = event.ports[0];
     if (!port || typeof port.postMessage !== 'function') return false;
     nativePort = port;
+    nativeTransportConnected = true;
     nativePort.onmessage = messageEvent => {
       const payload = receiveNativePayload(messageEvent && messageEvent.data);
       if (payload) handleParentData(payload, null, true);
@@ -514,6 +582,59 @@
 
   window.addEventListener('message', onParentMessage);
 
+  function activateAccessToken(accessToken, expiresIn) {
+    try {
+      if (typeof accessToken !== 'string' || !accessToken || accessToken.length > 4096)
+        throw new Error('Google 액세스 토큰 형식이 올바르지 않습니다.');
+      window.WaywardCloudSaveDrive.setAccessToken(accessToken, expiresIn);
+    } catch (error) {
+      clearPageToken(); sendStatus('reauth-required', String(error && error.message || error));
+      setStatus('Google 토큰을 설정하지 못했습니다.', true); updateButtons(); return false;
+    }
+    connected = true;
+    const seconds = Math.max(60, Math.min(3600, Number(expiresIn) || 3600));
+    if (tokenTimer !== null) clearTimeout(tokenTimer);
+    tokenTimer = setTimeout(() => {
+      clearPageToken();
+      sendStatus('reauth-required', 'Google 인증이 만료되었습니다. 다시 연결하세요.');
+      setDriveStatus('액세스 토큰 만료 — 재인증 필요', true);
+      setStatus('Google 인증이 만료되었습니다. 연결 버튼을 눌러 갱신하세요.', true);
+    }, Math.max(1000, (seconds - 15) * 1000));
+    updateButtons(); sendStatus('connected', 'Google 계정이 연결되었습니다.');
+    setDriveStatus('Google Drive에 연결됨'); setStatus('연결 완료. Drive 작업을 사용할 수 있습니다.');
+    return true;
+  }
+
+  function applyNativeAuthResult(payload) {
+    if (!nativeWebViewTransportRequested || !payload || payload.nonce !== nonce) return;
+    if (payload.type === 'wayward-cloud-auth-success') {
+      const scopes = String(payload.scope || '').split(/\\s+/);
+      if (!scopes.includes(DRIVE_SCOPE)) {
+        clearPageToken(); sendStatus('scope-missing', '필수 Google Drive 권한이 승인되지 않았습니다.');
+        setStatus('Google Drive appData 권한이 부족합니다. 권한을 다시 승인하세요.', true);
+        updateButtons(); return;
+      }
+      activateAccessToken(payload.accessToken, payload.expiresIn); return;
+    }
+    clearPageToken();
+    const message = String(payload.message || 'Google Drive 권한 승인이 완료되지 않았습니다.');
+    sendStatus('reauth-required', message); setStatus(message, true); updateButtons();
+  }
+
+  function applyNativeRevokeResult(payload) {
+    if (!nativeWebViewTransportRequested || !payload || payload.nonce !== nonce) return;
+    connected = false; clearTokenTimer();
+    if (window.WaywardCloudSaveDrive) window.WaywardCloudSaveDrive.clearAccessToken();
+    updateButtons();
+    if (payload.revoked === true) {
+      sendStatus('permission-revoked', 'Google 앱 권한이 해제되었습니다.');
+      setDriveStatus('Google 앱 권한이 철회되었습니다.'); setStatus('Google 앱 권한 철회를 완료했습니다.');
+    } else {
+      const message = String(payload.error || 'Google에서 권한 철회를 확인하지 못했습니다.');
+      sendStatus('revoke-failed', message); setDriveStatus(message, true); setStatus(message, true);
+    }
+  }
+
   function beginConnection(forceSelectAccount) {
     if (!ready || !openerSeen || !userConfirmed || !openerAlive()) {
       setStatus('Wayward 게임 팝업 연결을 먼저 확인해야 합니다.', true);
@@ -529,6 +650,14 @@
     setAccountStatus('Google 계정 및 Drive 접근 권한을 확인하고 있습니다.');
     setStatus('Google 인증을 시작합니다…');
 
+    if (nativeWebViewTransportRequested) {
+      if (!sendNativeCommand({ type: 'auth-request', selectAccount: forceSelectAccount === true })) {
+        clearPageToken(); sendStatus('reauth-required', '런처의 네이티브 Google 권한 요청을 시작하지 못했습니다.');
+        setStatus('앱 내부 Google 인증 요청을 전달하지 못했습니다.', true); updateButtons();
+      }
+      return;
+    }
+
     try {
       const client = google.accounts.oauth2.initTokenClient({
         client_id: clientId,
@@ -538,51 +667,24 @@
           if (!response || response.error || !response.access_token) {
             const code = String(response && response.error || 'token-error');
             if (code === 'access_denied') {
-              clearPageToken();
-              sendStatus('consent-denied', 'Google 계정 또는 Drive 권한 승인이 거부되었습니다.');
+              clearPageToken(); sendStatus('consent-denied', 'Google 계정 또는 Drive 권한 승인이 거부되었습니다.');
               setStatus('Google 계정 또는 권한 승인이 거부되었습니다.', true);
             } else {
               clearPageToken();
               sendStatus('reauth-required', response && (response.error_description || response.error) || 'Google 인증 정보를 받지 못했습니다.');
               setStatus('Google 인증에 실패했습니다.', true);
             }
-            updateButtons();
-            return;
+            updateButtons(); return;
           }
           let granted = false;
-          try { granted = google.accounts.oauth2.hasGrantedAllScopes(response, DRIVE_SCOPE); }
-          catch (_) {}
+          try { granted = google.accounts.oauth2.hasGrantedAllScopes(response, DRIVE_SCOPE); } catch (_) {}
+          if (!granted) granted = String(response.scope || '').split(/\\s+/).includes(DRIVE_SCOPE);
           if (!granted) {
-            granted = String(response.scope || '').split(/\s+/).includes(DRIVE_SCOPE);
-          }
-          if (!granted) {
-            clearPageToken();
-            sendStatus('scope-missing', '필수 Google Drive 권한이 승인되지 않았습니다.');
+            clearPageToken(); sendStatus('scope-missing', '필수 Google Drive 권한이 승인되지 않았습니다.');
             setStatus('Google Drive appData 권한이 부족합니다. 권한을 다시 승인하세요.', true);
-            updateButtons();
-            return;
+            updateButtons(); return;
           }
-          try {
-            window.WaywardCloudSaveDrive.setAccessToken(response.access_token, response.expires_in);
-          } catch (error) {
-            sendStatus('reauth-required', String(error && error.message || error));
-            setStatus('Google 토큰을 설정하지 못했습니다.', true);
-            updateButtons();
-            return;
-          }
-          connected = true;
-          const seconds = Math.max(60, Math.min(3600, Number(response.expires_in) || 3600));
-          if (tokenTimer !== null) clearTimeout(tokenTimer);
-          tokenTimer = setTimeout(() => {
-            clearPageToken();
-            sendStatus('reauth-required', 'Google 인증이 만료되었습니다. 다시 연결하세요.');
-            setDriveStatus('액세스 토큰 만료 — 재인증 필요', true);
-            setStatus('Google 인증이 만료되었습니다. 연결 버튼을 눌러 갱신하세요.', true);
-          }, Math.max(1000, (seconds - 15) * 1000));
-          updateButtons();
-          sendStatus('connected', 'Google 계정이 연결되었습니다.');
-          setDriveStatus('Google Drive에 연결됨');
-          setStatus('연결 완료. Drive 작업을 사용할 수 있습니다.');
+          activateAccessToken(response.access_token, response.expires_in);
         },
         error_callback: error => {
           const type = String(error && error.type || 'popup_error');
@@ -668,6 +770,14 @@
   logoutButton.addEventListener('click', explicitLogout);
   revokeButton.addEventListener('click', async () => {
     if (!connected || !window.WaywardCloudSaveDrive) return;
+    if (nativeWebViewTransportRequested) {
+      revokeButton.disabled = true; setDriveStatus('Google에 앱 권한 철회를 요청하는 중…');
+      if (!sendNativeCommand({ type: 'revoke-request' })) {
+        revokeButton.disabled = false;
+        setDriveStatus('런처에 Google 권한 철회 요청을 전달하지 못했습니다.', true);
+      }
+      return;
+    }
     revokeButton.disabled = true;
     setDriveStatus('Google에 권한 철회를 요청하는 중…');
     let result = null;
@@ -700,14 +810,23 @@
     clearPageToken();
   });
 
-  // Native Custom Tabs initializes the channel with a MessagePort-bearing message.
-  // Ordinary browsers keep the original real-window.opener protocol.
-  if (nativeTransportRequested) {
+  if (nativeWebViewTransportRequested) {
+    setStatus('런처 내부 보안 채널을 연결하고 있습니다.');
+    if (!nativeHost || typeof nativeHost.postMessage !== 'function') {
+      failClosed('런처 내부 메시지 연결을 사용할 수 없습니다. Android System WebView를 확인하세요.');
+    } else {
+      nativeHost.onmessage = handleNativeHostMessage;
+      if (!sendNativeCommand({ type: 'ready' })) failClosed('런처 내부 메시지 채널을 시작하지 못했습니다.');
+      setTimeout(() => {
+        if (!nativeTransportConnected && !nativeTransportClosed)
+          failClosed('런처 내부 메시지 채널 응답이 없습니다. 앱을 다시 실행하세요.');
+      }, 20000);
+    }
+  } else if (customTabsTransportRequested) {
     setStatus('런처의 보안 메시지 채널을 기다리고 있습니다.');
     setTimeout(() => {
-      if (!nativePort && !nativeTransportClosed) {
+      if (!nativePort && !nativeTransportClosed)
         failClosed('런처의 Custom Tabs 메시지 채널을 확인하지 못했습니다. 앱과 웹 연결 설정을 확인하세요.');
-      }
     }, 20000);
   } else {
     try {
@@ -716,11 +835,9 @@
       failClosed('Wayward 게임 창에 연결 준비 메시지를 보내지 못했습니다.');
       return;
     }
-
     popupWatchTimer = setInterval(() => {
       if (!openerAlive()) {
-        clearTokenTimer();
-        clearPageToken();
+        clearTokenTimer(); clearPageToken();
         if (popupWatchTimer !== null) clearInterval(popupWatchTimer);
         popupWatchTimer = null;
         failClosed('Wayward 게임 창이 닫혀 연결을 종료했습니다. 토큰은 메모리에서 삭제했습니다.');
@@ -728,5 +845,11 @@
     }, 1000);
   }
 
-  waitForGIS(Date.now() + 20000);
+  if (!nativeWebViewTransportRequested) {
+    const gisScript = document.createElement('script');
+    gisScript.src = 'https://accounts.google.com/gsi/client';
+    gisScript.async = true; gisScript.defer = true;
+    document.head.appendChild(gisScript);
+    waitForGIS(Date.now() + 20000);
+  }
 })();

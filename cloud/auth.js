@@ -640,8 +640,9 @@
       setStatus('Wayward 게임 팝업 연결을 먼저 확인해야 합니다.', true);
       return;
     }
-    if (!window.google || !google.accounts || !google.accounts.oauth2 ||
-        typeof google.accounts.oauth2.initTokenClient !== 'function') {
+    if (!nativeWebViewTransportRequested &&
+        (!window.google || !google.accounts || !google.accounts.oauth2 ||
+         typeof google.accounts.oauth2.initTokenClient !== 'function')) {
       setStatus('Google Identity 라이브러리를 아직 사용할 수 없습니다.', true);
       return;
     }

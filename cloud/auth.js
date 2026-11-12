@@ -637,7 +637,7 @@
   function applyNativeAuthResult(payload) {
     if (!nativeWebViewTransportRequested || !payload || payload.nonce !== nonce) return;
     if (payload.type === 'wayward-cloud-auth-success') {
-      const scopes = String(payload.scope || '').split(/\\s+/);
+      const scopes = String(payload.scope || '').split(/\s+/);
       if (!scopes.includes(DRIVE_SCOPE)) {
         clearPageToken(); sendStatus('scope-missing', '필수 Google Drive 권한이 승인되지 않았습니다.');
         setStatus('Google Drive appData 권한이 부족합니다. 권한을 다시 승인하세요.', true);
@@ -714,7 +714,7 @@
           }
           let granted = false;
           try { granted = google.accounts.oauth2.hasGrantedAllScopes(response, DRIVE_SCOPE); } catch (_) {}
-          if (!granted) granted = String(response.scope || '').split(/\\s+/).includes(DRIVE_SCOPE);
+          if (!granted) granted = String(response.scope || '').split(/\s+/).includes(DRIVE_SCOPE);
           if (!granted) {
             clearPageToken(); sendStatus('scope-missing', '필수 Google Drive 권한이 승인되지 않았습니다.');
             setStatus('Google Drive appData 권한이 부족합니다. 권한을 다시 승인하세요.', true);

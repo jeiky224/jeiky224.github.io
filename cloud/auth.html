@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="referrer" content="no-referrer">
+  <meta name="color-scheme" content="dark light">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' https://accounts.google.com/gsi/client; connect-src 'self' https://accounts.google.com/gsi/ https://www.googleapis.com; frame-src https://accounts.google.com/gsi/ https://accounts.google.com; style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style; img-src 'self' data:; base-uri 'none'; object-src 'none'; form-action 'none'">
+  <title>Wayward CloudSave | Google 계정 인증</title>
+  <link rel="stylesheet" href="./auth.css">
+  <script src="./config.js"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script src="./drive.js" defer></script>
+  <script src="./auth.js" defer></script>
+</head>
+<body>
+  <main>
+    <h1>Wayward CloudSave</h1>
+    <p class="intro">Google 계정을 연결해 Wayward CloudSave를 이용하세요.</p>
+
+    <section id="connection" class="panel" aria-live="polite">
+      <strong id="origin-title">게임 연결 확인 중…</strong>
+      <p id="origin-detail">보안 연결을 확인하고 있습니다.</p>
+      <p id="origin-value" class="small"></p>
+    </section>
+
+    <label id="confirm-wrap" class="confirm" hidden>
+      <input id="confirm" type="checkbox">
+      <span id="confirm-copy">Wayward 게임에서 직접 시작한 인증 요청입니다.</span>
+    </label>
+
+    <section class="panel">
+      <strong>Google 계정</strong>
+      <p id="account-status" role="status" aria-live="polite">게임 연결 확인을 기다리고 있습니다.</p>
+      <div class="actions">
+        <button id="connect" type="button" disabled>계정 연결</button>
+        <button id="select-account" type="button" class="secondary" disabled>계정 변경</button>
+      </div>
+      <div class="actions">
+        <button id="logout" type="button" class="secondary" disabled>로그아웃</button>
+        <button id="revoke" type="button" class="danger" disabled>앱 권한 해제</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <strong>Google Drive</strong>
+      <p id="drive-status" role="status" aria-live="polite">연결되지 않음</p>
+    </section>
+
+    <p id="status" role="status" aria-live="polite">인증 환경 확인 중…</p>
+    <p class="footnote"><a href="./recovery.html">팝업 연결 및 오류 복구 안내</a></p>
+  </main>
+</body>
+</html>

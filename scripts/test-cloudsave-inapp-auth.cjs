@@ -19,6 +19,8 @@ assert.match(auth, /sendResponse\(requestId, true, \{ revoked: true \}\)/);
 assert.match(auth, /applyNativeAuthResult/);
 assert.match(auth, /window\.WaywardCloudSaveDrive\.setAccessToken\(accessToken, expiresIn\)/);
 assert.match(auth, /nativeWebViewTransportRequested &&/);
+assert.match(auth, /!nativeWebViewTransportRequested && !\/\^\[\^@/,
+  'native AuthorizationClient flow must not depend on a web OAuth client ID');
 assert.match(auth, /accounts\.google\.com\/gsi\/client/);
 assert.match(auth, /https:\/\/www\.googleapis\.com\/auth\/drive\.appdata/);
 assert.ok(auth.includes(".split(/\\s+/)"), 'scope parsing must split on whitespace');

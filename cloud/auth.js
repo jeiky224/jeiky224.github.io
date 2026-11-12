@@ -789,7 +789,8 @@
     setTimeout(() => waitForGIS(deadline), 100);
   }
 
-  if (!nonceValid || !originValid || !/^[^@\s]+\.apps\.googleusercontent\.com$/.test(clientId)) {
+  if (!nonceValid || !originValid ||
+      (!nativeWebViewTransportRequested && !/^[^@\s]+\.apps\.googleusercontent\.com$/.test(clientId))) {
     failClosed('유효하지 않은 인증 요청입니다. 게임에서 다시 연결하세요.');
     return;
   }

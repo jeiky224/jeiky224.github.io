@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.wayward.launcher.official",
+      "sha256_cert_fingerprints": [
+        "F3:CA:95:AD:6C:6C:7D:19:23:27:C8:8F:82:B5:9E:53:B2:C9:89:7C:45:5A:0F:0B:EF:2E:AF:CF:29:A8:D7:54"
+      ]
+    }
+  }
+]

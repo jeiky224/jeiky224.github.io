@@ -185,7 +185,7 @@
   }
 
   function sendToGame(type, extra) {
-    if (!openerSeen || !openerAlive() || !nonceValid || !originValid) return false;
+    if ((!openerSeen && type !== 'wayward-cloudsave-page-ready') || !openerAlive() || !nonceValid || !originValid) return false;
     const payload = baseMessage(type, extra);
     if (sessionId) payload.sessionId = sessionId;
     if (nativeTransportRequested) return sendNativePayload(payload);
@@ -488,9 +488,6 @@
     };
     try { if (typeof nativePort.start === 'function') nativePort.start(); }
     catch (_) { failClosed('런처 메시지 채널을 시작하지 못했습니다.'); return false; }
-    openerSeen = true;
-    try { sessionId = makeNonce(); }
-    catch (_) { failClosed('이 브라우저에서 암호학적 난수를 생성하지 못했습니다.'); return false; }
     originTitle.textContent = 'Wayward 런처 보안 메시지 채널 연결됨';
     originDetail.textContent = 'Digital Asset Links로 검증된 런처 origin과 일회성 게임 nonce를 확인했습니다.';
     originValue.textContent = '게임 Origin: ' + gameOrigin;

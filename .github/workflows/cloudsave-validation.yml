@@ -1,0 +1,28 @@
+name: CloudSave static authentication validation
+
+on:
+  pull_request:
+    branches: ["main"]
+  push:
+    branches: ["main", "work/**"]
+
+permissions:
+  contents: read
+
+jobs:
+  static-auth:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Check JavaScript syntax
+        run: |
+          node --check cloud/auth.js
+          node --check cloud/drive.js
+          node --check cloud/config.js
+      - name: Check in-app authentication contract
+        run: node scripts/test-cloudsave-inapp-auth.cjs
+      - name: Check patch whitespace
+        run: git diff --check

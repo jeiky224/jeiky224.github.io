@@ -39,6 +39,7 @@
   let popupWatchTimer = null;
   let connected = false;
   let requestCount = 0;
+  let pendingNativeRevokeRequestId = null;
   const seenRequestIds = new Set();
   let nativePort = null;
   let nativeTransportClosed = false;
@@ -360,6 +361,34 @@
       return;
     }
 
+    if (action === 'revoke' && nativeWebViewTransportRequested) {
+      if (!connected || !window.WaywardCloudSaveDrive) {
+        sendResponse(requestId, false, null, {
+          code: 'revoke-unavailable',
+          message: '철회할 Google 토큰이 없습니다.'
+        });
+        return;
+      }
+      if (pendingNativeRevokeRequestId) {
+        sendResponse(requestId, false, null, {
+          code: 'revoke-in-progress',
+          message: 'Google 권한 철회가 이미 진행 중입니다.'
+        });
+        return;
+      }
+      pendingNativeRevokeRequestId = requestId;
+      setDriveStatus('Google에 앱 권한 철회를 요청하는 중…');
+      if (!sendNativeCommand({ type: 'revoke-request' })) {
+        pendingNativeRevokeRequestId = null;
+        sendResponse(requestId, false, null, {
+          code: 'revoke-unavailable',
+          message: '런처에 Google 권한 철회 요청을 전달하지 못했습니다.'
+        });
+        setDriveStatus('권한 철회 요청을 전달하지 못했습니다.', true);
+      }
+      return;
+    }
+
     if (action === 'revoke') {
       if (!connected || !window.WaywardCloudSaveDrive ||
           typeof window.google?.accounts?.oauth2?.revoke !== 'function') {
@@ -626,12 +655,18 @@
     connected = false; clearTokenTimer();
     if (window.WaywardCloudSaveDrive) window.WaywardCloudSaveDrive.clearAccessToken();
     updateButtons();
+    const requestId = pendingNativeRevokeRequestId;
+    pendingNativeRevokeRequestId = null;
     if (payload.revoked === true) {
       sendStatus('permission-revoked', 'Google 앱 권한이 해제되었습니다.');
       setDriveStatus('Google 앱 권한이 철회되었습니다.'); setStatus('Google 앱 권한 철회를 완료했습니다.');
+      if (requestId) sendResponse(requestId, true, { revoked: true });
     } else {
       const message = String(payload.error || 'Google에서 권한 철회를 확인하지 못했습니다.');
       sendStatus('revoke-failed', message); setDriveStatus(message, true); setStatus(message, true);
+      if (requestId) sendResponse(requestId, false, null, {
+        code: 'revoke-failed', message
+      });
     }
   }
 

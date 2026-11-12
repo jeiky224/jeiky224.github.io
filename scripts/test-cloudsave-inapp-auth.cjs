@@ -14,6 +14,8 @@ assert.match(auth, /window\.WaywardAuthHost/);
 assert.match(auth, /nativeHost\.onmessage = handleNativeHostMessage/);
 assert.match(auth, /type: 'auth-request'/);
 assert.match(auth, /type: 'revoke-request'/);
+assert.match(auth, /pendingNativeRevokeRequestId = requestId/);
+assert.match(auth, /sendResponse\(requestId, true, \{ revoked: true \}\)/);
 assert.match(auth, /applyNativeAuthResult/);
 assert.match(auth, /window\.WaywardCloudSaveDrive\.setAccessToken\(accessToken, expiresIn\)/);
 assert.match(auth, /nativeWebViewTransportRequested &&/);

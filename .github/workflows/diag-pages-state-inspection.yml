@@ -25,6 +25,10 @@ jobs:
           gh api "repos/$GITHUB_REPOSITORY/pages/builds/latest" --jq '{url, status, error, commit, duration, created_at, updated_at}'
           echo "RECENT_DEPLOYMENTS"
           gh api "repos/$GITHUB_REPOSITORY/deployments?environment=github-pages&per_page=20" --jq '.[] | [.id, .sha, .environment, .created_at, .updated_at, .task, .ref] | @tsv'
+          for id in 7751850744 7751848330 7751773483 7751770400 7749687109 7749683468; do
+            echo "DEPLOYMENT_STATUSES $id"
+            gh api "repos/$GITHUB_REPOSITORY/deployments/$id/statuses?per_page=10" --jq '.[] | [.id, .state, .created_at, .updated_at, .environment_url, .log_url, .description] | @tsv' || true
+          done
           for sha in c2f403deb04605384807ae66d7f0a4cb947502d5 68859e51f5ff2185b70329f99fae10d6ae073a2b 74ade0b0024a5ac00e7c53bf1c6b09bc12ca8fc0; do
             echo "PAGES_DEPLOYMENT_STATUS $sha"
             gh api "repos/$GITHUB_REPOSITORY/pages/deployments/$sha" --jq '{status}' || true

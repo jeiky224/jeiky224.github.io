@@ -1,0 +1,55 @@
+name: Temporary Pages state inspection
+
+on:
+  push:
+    branches: ["diag/pages-state-inspection-20261113"]
+
+permissions:
+  contents: read
+  pages: read
+  deployments: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read actual Pages configuration and active deployment state
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "PAGES_SITE_CONFIG"
+          gh api "repos/$GITHUB_REPOSITORY/pages" --jq '{url, status, build_type, source, cname, html_url, https_enforced, public}'
+          echo "LATEST_PAGES_BUILD"
+          gh api "repos/$GITHUB_REPOSITORY/pages/builds/latest" --jq '{url, status, error, commit, duration, created_at, updated_at}'
+          echo "RECENT_DEPLOYMENTS"
+          gh api "repos/$GITHUB_REPOSITORY/deployments?environment=github-pages&per_page=20" --jq '.[] | [.id, .sha, .environment, .created_at, .updated_at, .task, .ref] | @tsv'
+          for sha in c2f403deb04605384807ae66d7f0a4cb947502d5 68859e51f5ff2185b70329f99fae10d6ae073a2b 74ade0b0024a5ac00e7c53bf1c6b09bc12ca8fc0; do
+            echo "PAGES_DEPLOYMENT_STATUS $sha"
+            gh api "repos/$GITHUB_REPOSITORY/pages/deployments/$sha" --jq '{status}' || true
+          done
+      - name: Check live Pages file identity
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import urllib.request, hashlib, re
+          for path in ("cloud/auth.html", "cloud/auth.js", "cloud/auth.js?v=20261113-2"):
+              req=urllib.request.Request("https://jeiky224.github.io/"+path,
+                  headers={"User-Agent":"Wayward-Pages-State-Inspector/1.0"})
+              with urllib.request.urlopen(req, timeout=30) as response:
+                  body=response.read()
+                  print("LIVE",path,"status",response.status,"bytes",len(body),
+                        "sha256",hashlib.sha256(body).hexdigest(),
+                        "last-modified",response.headers.get("Last-Modified"),
+                        "cache-control",response.headers.get("Cache-Control"),
+                        "age",response.headers.get("Age"),
+                        "x-cache",response.headers.get("X-Cache"),
+                        "etag",response.headers.get("ETag"))
+                  if path.endswith(".html"):
+                      print("AUTH_SCRIPT_SRC",re.findall(rb"""<script[^>]+src=["']([^"']*auth[.]js[^"']*)""",body,re.I))
+                  else:
+                      print("NATIVE_WEBVIEW_CODE",b"nativeWebViewTransportRequested" in body,
+                            "NATIVE_HANDLER",b"nativeHost.onmessage = handleNativeHostMessage" in body,
+                            "LEGACY_ERROR", "Wayward 게임 창을 찾을 수 없습니다".encode() in body)
+          PY

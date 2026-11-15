@@ -1,0 +1,18 @@
+:root{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color-scheme:dark;background:#111827;color:#f3f4f6}
+*{box-sizing:border-box}
+body{margin:0;min-height:100svh;display:grid;place-items:center;padding:22px}
+main{width:min(100%,500px);padding:24px;border:1px solid #374151;border-radius:16px;background:#1f2937;box-shadow:0 16px 50px #0005}
+h1{font-size:1.35rem;margin:0 0 6px}
+p{line-height:1.55;color:#d1d5db;overflow-wrap:anywhere}
+.intro{margin:0 0 16px;color:#9ca3af}
+.panel{padding:15px;border-radius:11px;background:#111827;margin:14px 0}
+.panel p{margin:8px 0 0}
+.confirm{display:flex;align-items:flex-start;gap:10px;margin:14px 0;line-height:1.5;color:#e5e7eb}
+.confirm input{width:20px;height:20px;flex:0 0 auto;margin:2px 0 0}
+.actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+button{flex:1 1 180px;min-height:46px;padding:11px 14px;border:0;border-radius:9px;background:#4285f4;color:white;font:650 1rem system-ui;cursor:pointer}
+button:disabled{opacity:.5;cursor:not-allowed}
+button.secondary{background:#475569}
+.notice{font-size:.82rem;color:#9ca3af;margin:14px 0 0}
+[hidden]{display:none!important}
+.error{color:#fca5a5!important}

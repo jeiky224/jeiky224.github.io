@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="color-scheme" content="dark light">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' https://accounts.google.com/gsi/client; connect-src 'self' https://accounts.google.com/gsi/ https://oauth2.googleapis.com https://www.googleapis.com; frame-src https://accounts.google.com/gsi/ https://accounts.google.com; style-src 'self' https://accounts.google.com/gsi/style; img-src 'self' data:; base-uri 'none'; object-src 'none'; form-action 'none'">
+  <title>Wayward CloudSave | PC file 인증</title>
+  <link rel="stylesheet" href="./file-auth.css?v=20261116-5">
+  <script src="./config.js"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script src="./file-auth.js?v=20261116-5" defer></script>
+</head>
+<body>
+  <main>
+    <h1>Wayward CloudSave</h1>
+    <p class="intro">PC 로컬 게임의 Google Drive 연결</p>
+    <section class="panel" aria-live="polite">
+      <strong id="connection-title">게임 연결 확인 중…</strong>
+      <p id="connection-status">원래 게임 창에서 보낸 일회성 인증 채널을 기다리고 있습니다.</p>
+    </section>
+    <section id="auth-panel" class="panel" hidden>
+      <strong>요청 확인</strong>
+      <p id="request-description">Wayward 로컬 게임 창에서 시작한 인증 요청입니다.</p>
+      <label class="confirm">
+        <input id="confirm-request" type="checkbox">
+        <span>제가 직접 Wayward 게임에서 시작한 요청임을 확인했습니다. 로컬 파일의 정품 여부는 이 페이지에서 검증할 수 없다는 점을 이해합니다.</span>
+      </label>
+      <strong>Google 계정</strong>
+      <p id="auth-status" role="status" aria-live="polite">위 요청 확인을 완료한 뒤 Google 계정을 연결하세요.</p>
+      <div class="actions">
+        <button id="connect" type="button" disabled>Google 계정 선택 및 연결</button>
+        <button id="cancel" type="button" class="secondary">취소</button>
+      </div>
+    </section>
+    <p class="notice">이 페이지는 GitHub Pages의 정적 파일로 동작합니다. file:// 발신 Origin은 브라우저에서 null로 표시되지만, 이는 임의의 로컬 파일에도 해당하므로 Wayward 정품이나 발신 파일의 신뢰성을 증명하지 않습니다. 액세스 토큰은 URL·브라우저 저장소·일반 window 메시지에 기록하지 않으며, 인증 결과는 확인된 opener와 일회성 MessagePort로만 전달합니다.</p>
+  </main>
+</body>
+</html>
